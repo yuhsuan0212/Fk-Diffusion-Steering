@@ -1,6 +1,17 @@
+import itertools
+import sys
+from pathlib import Path
+
 import torch
 
-import itertools
+# MDLM uses top-level imports internally, so add the repo-local paths
+# explicitly instead of relying on the current working directory.
+REPO_ROOT = Path(__file__).resolve().parent
+MDLM_ROOT = REPO_ROOT / 'mdlm'
+for path in (REPO_ROOT, MDLM_ROOT):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
 
 from reward_functions import (
     sentiment_score,

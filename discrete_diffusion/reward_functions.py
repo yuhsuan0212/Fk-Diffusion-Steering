@@ -1,23 +1,47 @@
 # reward functions
 
-import torch
-import numpy as np
-
 import os
+from pathlib import Path
+
+import numpy as np
+import torch
 
 from transformers import (
-    RobertaTokenizer,
-    RobertaForSequenceClassification,
     AutoModelForCausalLM,
     AutoTokenizer,
+    RobertaForSequenceClassification,
+    RobertaTokenizer,
 )
-
 from infini_gram.engine import InfiniGramEngine
-from transformers import AutoTokenizer
 
 MODELS = {}
 
-INFINIGRAM_CACHE_DIR = '/mnt/swordfish-pool2/horvitz/infinigram/v4_dolmasample_olmo'
+INFINIGRAM_CACHE_DIR_ENV_VAR = 'INFINIGRAM_CACHE_DIR'
+
+
+def _get_infinigram_cache_dir():
+    cache_dir = os.environ.get(INFINIGRAM_CACHE_DIR_ENV_VAR)
+    if not cache_dir:
+        raise EnvironmentError(
+            f'{INFINIGRAM_CACHE_DIR_ENV_VAR} is not set. '
+            'Download an InfiniGram index locally and point the environment '
+            'variable at that directory.\n'
+            'Example:\n'
+            'aws s3 cp --no-sign-request --recursive '
+            's3://infini-gram-lite/index/v4_dolmasample_olmo <LOCAL_INDEX_PATH>\n'
+            f'export {INFINIGRAM_CACHE_DIR_ENV_VAR}=<LOCAL_INDEX_PATH>'
+        )
+
+    resolved_cache_dir = Path(cache_dir).expanduser().resolve()
+    if not resolved_cache_dir.exists():
+        raise FileNotFoundError(
+            f'{INFINIGRAM_CACHE_DIR_ENV_VAR} points to a missing path: '
+            f'{resolved_cache_dir}'
+        )
+
+    return resolved_cache_dir
+
+
 
 def logmeanexp(scores):
     if not isinstance(scores, torch.Tensor):
@@ -440,18 +464,14 @@ def infinigram_perp_score(
     global MODELS
 
     if 'infinigram' not in MODELS:
-        assert os.path.exists(
-            INFINIGRAM_CACHE_DIR
-        ), f"""Infinigram cache dir not found: {INFINIGRAM_CACHE_DIR}, see https://infini-gram.io/
-Example cmd: `aws s3 cp --no-sign-request --recursive s3://infini-gram-lite/index/v4_dolmasample_olmo <LOCAL_INDEX_PATH>`
-"""
+        index_dir = _get_infinigram_cache_dir()
         tokenizer = AutoTokenizer.from_pretrained(
             'allenai/OLMo-7B', trust_remote_code=True
         )
         MODELS['infinigram'] = {
             'tokenizer': tokenizer,
             'engine': InfiniGramEngine(
-                index_dir=INFINIGRAM_CACHE_DIR,
+                index_dir=str(index_dir),
                 eos_token_id=tokenizer.eos_token_id,
             ),
         }
